@@ -2,7 +2,7 @@ name: Deploy to AWS EC2
 
 on:
   push:
-    branches: [ main , master ]
+    branches: [ main, master ]
 
 jobs:
   deploy:
@@ -17,23 +17,10 @@ jobs:
           mkdir -p ~/.ssh/
           echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          # Add EC2 to known hosts to avoid host key verification
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
-      
-      - name: Test SSH connection
-        run: |
-          ssh -i ~/.ssh/deploy_key -o ConnectTimeout=10 ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "echo 'SSH connection successful'"
       
       - name: Deploy code to EC2
         run: |
-          ssh -i ~/.ssh/deploy_key ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-            # Update packages and install Apache/PHP
-            sudo apt update -y
-            sudo apt install -y apache2 php libapache2-mod-php php-mysql php-curl
-            
-            # Create directory if not exists
-            sudo mkdir -p /var/www/html/education-portal
-            
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
             # Clone or pull repository
             if [ -d "/var/www/html/education-portal/.git" ]; then
               cd /var/www/html/education-portal
@@ -46,8 +33,8 @@ jobs:
             sudo chown -R www-data:www-data /var/www/html/education-portal
             sudo chmod -R 755 /var/www/html/education-portal
             
-            # Configure Apache to serve the correct directory
-            sudo cat > /etc/apache2/sites-available/education-portal.conf << 'APACHE'
+            # Create Apache virtual host configuration
+            sudo tee /etc/apache2/sites-available/education-portal.conf > /dev/null << 'APACHEEOF'
             <VirtualHost *:80>
                 DocumentRoot /var/www/html/education-portal
                 <Directory /var/www/html/education-portal>
@@ -58,12 +45,22 @@ jobs:
                 ErrorLog ${APACHE_LOG_DIR}/error.log
                 CustomLog ${APACHE_LOG_DIR}/access.log combined
             </VirtualHost>
-            APACHE
+            APACHEEOF
             
             # Enable the site and restart Apache
-            sudo a2dissite 000-default.conf
+            sudo a2dissite 000-default.conf 2>/dev/null || true
             sudo a2ensite education-portal.conf
             sudo systemctl restart apache2
             
             echo "Deployment completed successfully!"
+          EOF
+      
+      - name: Verify deployment
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            echo "=== Apache status ==="
+            sudo systemctl status apache2 --no-pager | grep Active
+            echo ""
+            echo "=== Files in document root ==="
+            ls -la /var/www/html/education-portal/ | head -10
           EOF
