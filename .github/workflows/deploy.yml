@@ -1,0 +1,41 @@
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh/
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+      
+      - name: Deploy to EC2
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            # EC2 पर पहुँचकर ये commands run होंगे
+            cd /var/www/html/education-portal
+            
+            # GitHub से latest code pull करें
+            sudo git pull https://github.com/${{ github.repository }}.git main
+            
+            # अगर पहली बार है तो clone करें
+            if [ ! -d "/var/www/html/education-portal/.git" ]; then
+              sudo git clone https://github.com/${{ github.repository }}.git /var/www/html/education-portal
+            fi
+            
+            # Permissions set करें
+            sudo chown -R www-data:www-data /var/www/html/education-portal
+            sudo chmod -R 755 /var/www/html/education-portal
+            
+            # Apache restart करें
+            sudo systemctl restart apache2
+          EOF
