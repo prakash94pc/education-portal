@@ -2,7 +2,7 @@
 // RDS Database Configuration
 $host = 'education-db.c3yas06kqp6r.ap-south-1.rds.amazonaws.com';  // सिर्फ यही endpoint
 $user = 'admin';
-$password = 'Prakash@123';  // ⚠️ अपना RDS password डालें
+$password = 'Prakash-123';  // ⚠️ अपना RDS password डालें
 $dbname = 'education_db';
 $port = 3306;
 
